@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>Calibrating per-sample gene set scores</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { display: inline-block; text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Calibrating per-sample gene set scores</h1>
+
+
+
+<div id="what-this-package-is-for" class="section level2">
+<h2>What this package is for</h2>
+<p>A common workflow in cancer genomics: compute a per-sample score for
+each gene set (ssGSEA, GSVA, or a mean of standardized expression), then
+treat that score as an ordinary variable — compare it between groups,
+put it in a Cox model, test it against stage or survival. The p-values
+that come out assume the genes in the set are independent. They are
+not.</p>
+<p>This package computes an empirical p-value instead, using a null
+distribution built from random gene sets matched on size and mean
+expression. It also tells you when that null cannot be trusted.</p>
+</div>
+<div id="a-worked-example" class="section level2">
+<h2>A worked example</h2>
+<p>Simulate an expression matrix where nothing is happening.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">library</span>(gscalibrate)</span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">1</span>)</span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>n_genes <span class="ot">&lt;-</span> <span class="dv">3000</span>; n_samples <span class="ot">&lt;-</span> <span class="dv">80</span></span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>expr <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="fu">rnorm</span>(n_genes <span class="sc">*</span> n_samples), n_genes, n_samples,</span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>               <span class="at">dimnames =</span> <span class="fu">list</span>(<span class="fu">paste0</span>(<span class="st">&quot;gene&quot;</span>, <span class="fu">seq_len</span>(n_genes)),</span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>                               <span class="fu">paste0</span>(<span class="st">&quot;s&quot;</span>, <span class="fu">seq_len</span>(n_samples))))</span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>group <span class="ot">&lt;-</span> <span class="fu">rep</span>(<span class="fu">c</span>(<span class="cn">TRUE</span>, <span class="cn">FALSE</span>), <span class="at">each =</span> n_samples <span class="sc">/</span> <span class="dv">2</span>)</span>
+<span id="cb1-9"><a href="#cb1-9" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" tabindex="-1"></a>sets <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">setA =</span> <span class="fu">paste0</span>(<span class="st">&quot;gene&quot;</span>, <span class="dv">1</span><span class="sc">:</span><span class="dv">120</span>),</span>
+<span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>             <span class="at">setB =</span> <span class="fu">paste0</span>(<span class="st">&quot;gene&quot;</span>, <span class="dv">201</span><span class="sc">:</span><span class="dv">320</span>))</span>
+<span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a></span>
+<span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a><span class="fu">calibrate_geneset</span>(expr, sets, group, <span class="at">n_null =</span> <span class="dv">100</span>)</span>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a><span class="co">#&gt;    set   m       beta  p_nominal p_empirical  floor_95 floor_std       rho_set</span></span>
+<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a><span class="co">#&gt; 1 setA 120 -0.1656512 0.46231743        0.52 0.4382483  1.959906 -0.0004828015</span></span>
+<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a><span class="co">#&gt; 2 setB 120  0.4062055 0.06898088        0.06 0.4096214  1.831883 -0.0018959187</span></span>
+<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a><span class="co">#&gt;   rho_null_max reliable</span></span>
+<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a><span class="co">#&gt; 1  0.004878072     TRUE</span></span>
+<span id="cb1-19"><a href="#cb1-19" tabindex="-1"></a><span class="co">#&gt; 2  0.002751192     TRUE</span></span></code></pre></div>
+<p>With independent genes and no effect, nominal and empirical p-values
+agree and <code>floor_std</code> sits near the theoretical 1.96.
+<code>reliable</code> is <code>TRUE</code>: the tested sets are no more
+internally correlated than a random draw.</p>
+</div>
+<div id="where-the-parametric-p-value-goes-wrong" class="section level2">
+<h2>Where the parametric p-value goes wrong</h2>
+<p>Now give the whole transcriptome a mild shift between groups — as
+happens whenever the grouping variable tracks something real in the
+tumour — and make one set internally coherent, as real gene sets
+are.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">2</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>expr2 <span class="ot">&lt;-</span> expr</span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a><span class="co"># 40% of all genes differ slightly between groups</span></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a>de <span class="ot">&lt;-</span> <span class="fu">sample</span>(n_genes, <span class="fl">0.4</span> <span class="sc">*</span> n_genes)</span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>expr2[de, group] <span class="ot">&lt;-</span> expr2[de, group] <span class="sc">+</span> <span class="fu">rnorm</span>(<span class="fu">length</span>(de), <span class="dv">0</span>, <span class="fl">0.3</span>)</span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a><span class="co"># setA shares a latent factor: a coherent set</span></span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>lat <span class="ot">&lt;-</span> <span class="fu">rnorm</span>(n_samples)</span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a>idx <span class="ot">&lt;-</span> <span class="fu">match</span>(sets<span class="sc">$</span>setA, <span class="fu">rownames</span>(expr2))</span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a>expr2[idx, ] <span class="ot">&lt;-</span> <span class="fu">sqrt</span>(<span class="fl">0.15</span>) <span class="sc">*</span> <span class="fu">matrix</span>(<span class="fu">rep</span>(lat, <span class="at">each =</span> <span class="fu">length</span>(idx)),</span>
+<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a>                                    <span class="fu">length</span>(idx), n_samples) <span class="sc">+</span></span>
+<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a>                <span class="fu">sqrt</span>(<span class="fl">0.85</span>) <span class="sc">*</span> expr2[idx, ]</span>
+<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a></span>
+<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a>res <span class="ot">&lt;-</span> <span class="fu">calibrate_geneset</span>(expr2, sets, group, <span class="at">n_null =</span> <span class="dv">100</span>)</span>
+<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a><span class="co">#&gt; Warning: Sets with reliable = FALSE are more internally correlated than any</span></span>
+<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a><span class="co">#&gt; random draw achieved; the empirical null is anti-conservative for these. Use</span></span>
+<span id="cb2-18"><a href="#cb2-18" tabindex="-1"></a><span class="co">#&gt; limma::roast or limma::cameraPR instead.</span></span>
+<span id="cb2-19"><a href="#cb2-19" tabindex="-1"></a>res[, <span class="fu">c</span>(<span class="st">&quot;set&quot;</span>, <span class="st">&quot;beta&quot;</span>, <span class="st">&quot;p_nominal&quot;</span>, <span class="st">&quot;p_empirical&quot;</span>, <span class="st">&quot;floor_std&quot;</span>,</span>
+<span id="cb2-20"><a href="#cb2-20" tabindex="-1"></a>        <span class="st">&quot;rho_set&quot;</span>, <span class="st">&quot;rho_null_max&quot;</span>, <span class="st">&quot;reliable&quot;</span>)]</span>
+<span id="cb2-21"><a href="#cb2-21" tabindex="-1"></a><span class="co">#&gt;    set       beta p_nominal p_empirical floor_std     rho_set rho_null_max</span></span>
+<span id="cb2-22"><a href="#cb2-22" tabindex="-1"></a><span class="co">#&gt; 1 setA 0.01249225 0.9558714        0.94  2.408112  0.15875525  0.004781111</span></span>
+<span id="cb2-23"><a href="#cb2-23" tabindex="-1"></a><span class="co">#&gt; 2 setB 0.11186600 0.6199604        0.63  2.472298 -0.00216998  0.002596413</span></span>
+<span id="cb2-24"><a href="#cb2-24" tabindex="-1"></a><span class="co">#&gt;   reliable</span></span>
+<span id="cb2-25"><a href="#cb2-25" tabindex="-1"></a><span class="co">#&gt; 1    FALSE</span></span>
+<span id="cb2-26"><a href="#cb2-26" tabindex="-1"></a><span class="co">#&gt; 2     TRUE</span></span></code></pre></div>
+<p>Two things to read here.</p>
+<p><code>floor_std</code> is the 95th percentile of the null coefficient
+expressed in units of its own standard error. Compare it to
+<strong>1.96</strong>. When it is much larger, the parametric test is
+miscalibrated for this data and this grouping — a nominal p-value of
+0.01 does not mean what it usually means.</p>
+<p><code>reliable</code> is <code>FALSE</code> for <code>setA</code>.
+Its internal correlation (<code>rho_set</code>) exceeds anything a
+random draw achieved (<code>rho_null_max</code>), so the null was built
+from sets less coherent than the one being tested, and the empirical
+p-value is itself anti-conservative.</p>
+</div>
+<div id="the-limitation-stated-plainly" class="section level2">
+<h2>The limitation, stated plainly</h2>
+<p>A draw-based null cannot be fixed by matching draws on correlation.
+In TCGA lung adenocarcinoma, Human Protein Atlas tissue programs reach
+mean inter-gene correlation of 0.245, while random draws of the same
+size reach at most 0.021. There is no candidate pool to draw a match
+from, because coherence is what makes a gene set a gene set rather than
+a list.</p>
+<p>Simulated type I error for a coherent set (ρ = 0.15 against a
+background of 0.05) is 0.125 at 250 genes and 0.255 at 900 genes,
+against a nominal 0.05.</p>
+<p>So when <code>reliable</code> is <code>FALSE</code>, this package is
+not the right tool. Use one that estimates correlation from the set
+itself:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">library</span>(limma)</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>design <span class="ot">&lt;-</span> <span class="fu">model.matrix</span>(<span class="sc">~</span> group)</span>
+<span id="cb3-3"><a href="#cb3-3" tabindex="-1"></a><span class="fu">roast</span>(expr2, <span class="at">index =</span> <span class="fu">which</span>(<span class="fu">rownames</span>(expr2) <span class="sc">%in%</span> sets<span class="sc">$</span>setA),</span>
+<span id="cb3-4"><a href="#cb3-4" tabindex="-1"></a>      <span class="at">design =</span> design, <span class="at">contrast =</span> <span class="dv">2</span>)</span>
+<span id="cb3-5"><a href="#cb3-5" tabindex="-1"></a><span class="fu">cameraPR</span>(statistic, index)   <span class="co"># direct replacement for pre-ranked GSEA</span></span></code></pre></div>
+<p>In the same simulation, <code>roast</code> gives type I error 0.035
+at 250 genes and 0.065 at 900, with power 0.76 and 0.72. It is also
+faster. Note that <code>roast</code> itself over-rejects for small sets
+(0.135 at 75 genes), so no method here is universally correct.</p>
+</div>
+<div id="when-this-package-is-still-useful" class="section level2">
+<h2>When this package is still useful</h2>
+<p>Three cases.</p>
+<p><strong>Diagnosis.</strong> <code>floor_std</code> quantifies how far
+the parametric null is from theory for your particular data and
+grouping. That is worth knowing before you trust any p-value from this
+workflow, whichever test produced it.</p>
+<p><strong>Weakly coherent sets.</strong> When <code>reliable</code> is
+<code>TRUE</code>, the empirical p-value is sound and the procedure is
+straightforward to explain.</p>
+<p><strong>Auditing published results.</strong> Applied to a
+pre-registered pan-cancer analysis, 28 of 43 associations significant
+after Benjamini–Hochberg correction — 65% — failed empirical
+calibration. Independently, <code>limma::camera</code> agreed with the
+empirical null on 90 of 99 tests with no contradictions in either
+direction.</p>
+</div>
+<div id="choosing-n_null" class="section level2">
+<h2>Choosing <code>n_null</code></h2>
+<p>The resolution of <code>p_empirical</code> is <code>1/n_null</code>.
+The default of 100 is enough to distinguish 0.5 from 0.05 but not 0.07
+from 0.13. When a result sits near your threshold, raise it to 1000.</p>
+</div>
+<div id="reference" class="section level2">
+<h2>Reference</h2>
+<p>Wu D, Smyth GK (2012). Camera: a competitive gene set test accounting
+for inter-gene correlation. <em>Nucleic Acids Research</em> 40,
+e133.</p>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

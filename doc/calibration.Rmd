@@ -1,0 +1,140 @@
+---
+title: "Calibrating per-sample gene set scores"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Calibrating per-sample gene set scores}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+## What this package is for
+
+A common workflow in cancer genomics: compute a per-sample score for each gene
+set (ssGSEA, GSVA, or a mean of standardized expression), then treat that score
+as an ordinary variable — compare it between groups, put it in a Cox model, test
+it against stage or survival. The p-values that come out assume the genes in the
+set are independent. They are not.
+
+This package computes an empirical p-value instead, using a null distribution
+built from random gene sets matched on size and mean expression. It also tells
+you when that null cannot be trusted.
+
+## A worked example
+
+Simulate an expression matrix where nothing is happening.
+
+```{r}
+library(gscalibrate)
+set.seed(1)
+
+n_genes <- 3000; n_samples <- 80
+expr <- matrix(rnorm(n_genes * n_samples), n_genes, n_samples,
+               dimnames = list(paste0("gene", seq_len(n_genes)),
+                               paste0("s", seq_len(n_samples))))
+group <- rep(c(TRUE, FALSE), each = n_samples / 2)
+
+sets <- list(setA = paste0("gene", 1:120),
+             setB = paste0("gene", 201:320))
+
+calibrate_geneset(expr, sets, group, n_null = 100)
+```
+
+With independent genes and no effect, nominal and empirical p-values agree and
+`floor_std` sits near the theoretical 1.96. `reliable` is `TRUE`: the tested sets
+are no more internally correlated than a random draw.
+
+## Where the parametric p-value goes wrong
+
+Now give the whole transcriptome a mild shift between groups — as happens
+whenever the grouping variable tracks something real in the tumour — and make
+one set internally coherent, as real gene sets are.
+
+```{r}
+set.seed(2)
+expr2 <- expr
+
+# 40% of all genes differ slightly between groups
+de <- sample(n_genes, 0.4 * n_genes)
+expr2[de, group] <- expr2[de, group] + rnorm(length(de), 0, 0.3)
+
+# setA shares a latent factor: a coherent set
+lat <- rnorm(n_samples)
+idx <- match(sets$setA, rownames(expr2))
+expr2[idx, ] <- sqrt(0.15) * matrix(rep(lat, each = length(idx)),
+                                    length(idx), n_samples) +
+                sqrt(0.85) * expr2[idx, ]
+
+res <- calibrate_geneset(expr2, sets, group, n_null = 100)
+res[, c("set", "beta", "p_nominal", "p_empirical", "floor_std",
+        "rho_set", "rho_null_max", "reliable")]
+```
+
+Two things to read here.
+
+`floor_std` is the 95th percentile of the null coefficient expressed in units of
+its own standard error. Compare it to **1.96**. When it is much larger, the
+parametric test is miscalibrated for this data and this grouping — a nominal
+p-value of 0.01 does not mean what it usually means.
+
+`reliable` is `FALSE` for `setA`. Its internal correlation (`rho_set`) exceeds
+anything a random draw achieved (`rho_null_max`), so the null was built from sets
+less coherent than the one being tested, and the empirical p-value is itself
+anti-conservative.
+
+## The limitation, stated plainly
+
+A draw-based null cannot be fixed by matching draws on correlation. In TCGA lung
+adenocarcinoma, Human Protein Atlas tissue programs reach mean inter-gene
+correlation of 0.245, while random draws of the same size reach at most 0.021.
+There is no candidate pool to draw a match from, because coherence is what makes
+a gene set a gene set rather than a list.
+
+Simulated type I error for a coherent set (ρ = 0.15 against a background of 0.05)
+is 0.125 at 250 genes and 0.255 at 900 genes, against a nominal 0.05.
+
+So when `reliable` is `FALSE`, this package is not the right tool. Use one that
+estimates correlation from the set itself:
+
+```{r, eval = FALSE}
+library(limma)
+design <- model.matrix(~ group)
+roast(expr2, index = which(rownames(expr2) %in% sets$setA),
+      design = design, contrast = 2)
+cameraPR(statistic, index)   # direct replacement for pre-ranked GSEA
+```
+
+In the same simulation, `roast` gives type I error 0.035 at 250 genes and 0.065
+at 900, with power 0.76 and 0.72. It is also faster. Note that `roast` itself
+over-rejects for small sets (0.135 at 75 genes), so no method here is universally
+correct.
+
+## When this package is still useful
+
+Three cases.
+
+**Diagnosis.** `floor_std` quantifies how far the parametric null is from theory
+for your particular data and grouping. That is worth knowing before you trust any
+p-value from this workflow, whichever test produced it.
+
+**Weakly coherent sets.** When `reliable` is `TRUE`, the empirical p-value is
+sound and the procedure is straightforward to explain.
+
+**Auditing published results.** Applied to a pre-registered pan-cancer analysis,
+28 of 43 associations significant after Benjamini–Hochberg correction — 65% —
+failed empirical calibration. Independently, `limma::camera` agreed with the
+empirical null on 90 of 99 tests with no contradictions in either direction.
+
+## Choosing `n_null`
+
+The resolution of `p_empirical` is `1/n_null`. The default of 100 is enough to
+distinguish 0.5 from 0.05 but not 0.07 from 0.13. When a result sits near your
+threshold, raise it to 1000.
+
+## Reference
+
+Wu D, Smyth GK (2012). Camera: a competitive gene set test accounting for
+inter-gene correlation. *Nucleic Acids Research* 40, e133.

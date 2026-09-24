@@ -1,0 +1,21 @@
+Package: gscalibrate
+Type: Package
+Title: Empirical Calibration for Per-Sample Gene Set Scores
+Version: 0.1.0
+Authors@R: person('Joel', 'Minocha', role = c('aut','cre'),
+                  email = 'you@example.com')
+Description: Per-sample gene set scores (ssGSEA, GSVA, mean-z) are often entered
+    as variables in regression models without any correction for inter-gene
+    correlation, which inflates significance. This package computes empirical
+    p-values against matched-random gene sets, reports the 95th-percentile null
+    floor, and warns when the tested set is internally coherent enough that a
+    draw-based null is unreliable. See Wu and Smyth (2012) <doi:10.1093/nar/gks461>
+    for the correlation-aware alternative.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends: R (>= 4.0)
+Imports: stats
+Suggests: GSVA, limma, testthat (>= 3.0.0), knitr, rmarkdown
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+Config/roxygen2/version: 8.0.0
