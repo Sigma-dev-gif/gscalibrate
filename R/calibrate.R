@@ -80,6 +80,11 @@ calibrate_geneset <- function(expr, sets, group, covariates = NULL,
   }
 
   zsc <- function(x) (x - mean(x)) / stats::sd(x)
+  resid_coh <- function(g) {
+    if (length(g) < 3) return(NA_real_)
+    R <- t(stats::resid(stats::lm(t(expr[g, , drop = FALSE]) ~ group)))
+    r <- stats::cor(t(R)); mean(r[upper.tri(r)])
+  }
   gm  <- rowMeans(expr)
   dec <- cut(gm, stats::quantile(gm, 0:10 / 10),
                     include.lowest = TRUE, labels = FALSE)
@@ -109,16 +114,17 @@ calibrate_geneset <- function(expr, sets, group, covariates = NULL,
     nb  <- vapply(2:nrow(S), function(i) fitb(S[i, ])[1], numeric(1))
 
     se_fac <- sqrt(1 / sum(group == group[1]) + 1 / sum(group != group[1]))
-    rho_s  <- set_coherence(expr, g)
+    rho_s  <- resid_coh(g)
     rho_n  <- max(vapply(draws, function(d) set_coherence(expr, d), numeric(1)),
                   na.rm = TRUE)
 
     data.frame(set = nm, m = length(g),
                beta = unname(obs[1]), p_nominal = unname(obs[2]),
-               p_empirical = mean(abs(nb) >= abs(obs[1])),
+               p_empirical = (sum(abs(nb) >= abs(obs[1])) + 1) / (length(nb) + 1),
                floor_95 = unname(stats::quantile(abs(nb), 0.95)),
                floor_std = unname(stats::quantile(abs(nb), 0.95)) / se_fac,
                rho_set = rho_s, rho_null_max = rho_n,
+               recommended = if (length(g) >= 150) 'roast' else 'empirical',
                reliable = !is.na(rho_s) && rho_s <= coherence_warn * rho_n,
                stringsAsFactors = FALSE)
   })
