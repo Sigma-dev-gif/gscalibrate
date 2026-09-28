@@ -44,7 +44,7 @@ calibrate_geneset(expr, sets, group, n_null = 100)
 ```
 
 With independent genes and no effect, nominal and empirical p-values agree and
-`floor_std` sits near the theoretical 1.96. `reliable` is `TRUE`: the tested sets
+`floor_std` sits near the theoretical 1.96. `ratio` is `TRUE`: the tested sets
 are no more internally correlated than a random draw.
 
 ## Where the parametric p-value goes wrong
@@ -69,8 +69,8 @@ expr2[idx, ] <- sqrt(0.15) * matrix(rep(lat, each = length(idx)),
                 sqrt(0.85) * expr2[idx, ]
 
 res <- calibrate_geneset(expr2, sets, group, n_null = 100)
-res[, c("set", "beta", "p_nominal", "p_empirical", "floor_std",
-        "rho_set", "rho_null_max", "reliable")]
+
+        
 ```
 
 Two things to read here.
@@ -80,8 +80,8 @@ its own standard error. Compare it to **1.96**. When it is much larger, the
 parametric test is miscalibrated for this data and this grouping — a nominal
 p-value of 0.01 does not mean what it usually means.
 
-`reliable` is `FALSE` for `setA`. Its internal correlation (`rho_set`) exceeds
-anything a random draw achieved (`rho_null_max`), so the null was built from sets
+`ratio` is `FALSE` for `setA`. Its internal correlation (`rho_set`) exceeds
+anything a random draw achieved (`sigma_within`), so the null was built from sets
 less coherent than the one being tested, and the empirical p-value is itself
 anti-conservative.
 
@@ -96,7 +96,7 @@ a gene set a gene set rather than a list.
 Simulated type I error for a coherent set (ρ = 0.15 against a background of 0.05)
 is 0.125 at 250 genes and 0.255 at 900 genes, against a nominal 0.05.
 
-So when `reliable` is `FALSE`, this package is not the right tool. Use one that
+So when `ratio` is `FALSE`, this package is not the right tool. Use one that
 estimates correlation from the set itself:
 
 ```{r, eval = FALSE}
@@ -120,7 +120,7 @@ Three cases.
 for your particular data and grouping. That is worth knowing before you trust any
 p-value from this workflow, whichever test produced it.
 
-**Weakly coherent sets.** When `reliable` is `TRUE`, the empirical p-value is
+**Weakly coherent sets.** When `ratio` is `TRUE`, the empirical p-value is
 sound and the procedure is straightforward to explain.
 
 **Auditing published results.** Applied to a pre-registered pan-cancer analysis,

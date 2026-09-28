@@ -368,15 +368,15 @@ expression. It also tells you when that null cannot be trusted.</p>
 <span id="cb1-11"><a href="#cb1-11" tabindex="-1"></a>             <span class="at">setB =</span> <span class="fu">paste0</span>(<span class="st">&quot;gene&quot;</span>, <span class="dv">201</span><span class="sc">:</span><span class="dv">320</span>))</span>
 <span id="cb1-12"><a href="#cb1-12" tabindex="-1"></a></span>
 <span id="cb1-13"><a href="#cb1-13" tabindex="-1"></a><span class="fu">calibrate_geneset</span>(expr, sets, group, <span class="at">n_null =</span> <span class="dv">100</span>)</span>
-<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a><span class="co">#&gt;    set   m       beta  p_nominal p_empirical  floor_95 floor_std       rho_set</span></span>
-<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a><span class="co">#&gt; 1 setA 120 -0.1656512 0.46231743        0.52 0.4382483  1.959906 -0.0004828015</span></span>
-<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a><span class="co">#&gt; 2 setB 120  0.4062055 0.06898088        0.06 0.4096214  1.831883 -0.0018959187</span></span>
-<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a><span class="co">#&gt;   rho_null_max reliable</span></span>
-<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a><span class="co">#&gt; 1  0.004878072     TRUE</span></span>
-<span id="cb1-19"><a href="#cb1-19" tabindex="-1"></a><span class="co">#&gt; 2  0.002751192     TRUE</span></span></code></pre></div>
+<span id="cb1-14"><a href="#cb1-14" tabindex="-1"></a><span class="co">#&gt;    set   m       beta  p_nominal p_uncorrected p_empirical sigma_within</span></span>
+<span id="cb1-15"><a href="#cb1-15" tabindex="-1"></a><span class="co">#&gt; 1 setA 120 -0.1656512 0.46231743     0.5346535   0.4752475    0.2445457</span></span>
+<span id="cb1-16"><a href="#cb1-16" tabindex="-1"></a><span class="co">#&gt; 2 setB 120  0.4062055 0.06898088     0.1683168   0.1188119    0.2460610</span></span>
+<span id="cb1-17"><a href="#cb1-17" tabindex="-1"></a><span class="co">#&gt;   sigma_across     ratio      rho_set</span></span>
+<span id="cb1-18"><a href="#cb1-18" tabindex="-1"></a><span class="co">#&gt; 1    0.2232863 0.9130658 -0.000443279</span></span>
+<span id="cb1-19"><a href="#cb1-19" tabindex="-1"></a><span class="co">#&gt; 2    0.2322830 0.9440059 -0.002091068</span></span></code></pre></div>
 <p>With independent genes and no effect, nominal and empirical p-values
 agree and <code>floor_std</code> sits near the theoretical 1.96.
-<code>reliable</code> is <code>TRUE</code>: the tested sets are no more
+<code>ratio</code> is <code>TRUE</code>: the tested sets are no more
 internally correlated than a random draw.</p>
 </div>
 <div id="where-the-parametric-p-value-goes-wrong" class="section level2">
@@ -400,28 +400,19 @@ are.</p>
 <span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a>                <span class="fu">sqrt</span>(<span class="fl">0.85</span>) <span class="sc">*</span> expr2[idx, ]</span>
 <span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a></span>
 <span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a>res <span class="ot">&lt;-</span> <span class="fu">calibrate_geneset</span>(expr2, sets, group, <span class="at">n_null =</span> <span class="dv">100</span>)</span>
-<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a><span class="co">#&gt; Warning: Sets with reliable = FALSE are more internally correlated than any</span></span>
-<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a><span class="co">#&gt; random draw achieved; the empirical null is anti-conservative for these. Use</span></span>
-<span id="cb2-18"><a href="#cb2-18" tabindex="-1"></a><span class="co">#&gt; limma::roast or limma::cameraPR instead.</span></span>
-<span id="cb2-19"><a href="#cb2-19" tabindex="-1"></a>res[, <span class="fu">c</span>(<span class="st">&quot;set&quot;</span>, <span class="st">&quot;beta&quot;</span>, <span class="st">&quot;p_nominal&quot;</span>, <span class="st">&quot;p_empirical&quot;</span>, <span class="st">&quot;floor_std&quot;</span>,</span>
-<span id="cb2-20"><a href="#cb2-20" tabindex="-1"></a>        <span class="st">&quot;rho_set&quot;</span>, <span class="st">&quot;rho_null_max&quot;</span>, <span class="st">&quot;reliable&quot;</span>)]</span>
-<span id="cb2-21"><a href="#cb2-21" tabindex="-1"></a><span class="co">#&gt;    set       beta p_nominal p_empirical floor_std     rho_set rho_null_max</span></span>
-<span id="cb2-22"><a href="#cb2-22" tabindex="-1"></a><span class="co">#&gt; 1 setA 0.01249225 0.9558714        0.94  2.408112  0.15875525  0.004781111</span></span>
-<span id="cb2-23"><a href="#cb2-23" tabindex="-1"></a><span class="co">#&gt; 2 setB 0.11186600 0.6199604        0.63  2.472298 -0.00216998  0.002596413</span></span>
-<span id="cb2-24"><a href="#cb2-24" tabindex="-1"></a><span class="co">#&gt;   reliable</span></span>
-<span id="cb2-25"><a href="#cb2-25" tabindex="-1"></a><span class="co">#&gt; 1    FALSE</span></span>
-<span id="cb2-26"><a href="#cb2-26" tabindex="-1"></a><span class="co">#&gt; 2     TRUE</span></span></code></pre></div>
+<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a></span>
+<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a>        </span></code></pre></div>
 <p>Two things to read here.</p>
 <p><code>floor_std</code> is the 95th percentile of the null coefficient
 expressed in units of its own standard error. Compare it to
 <strong>1.96</strong>. When it is much larger, the parametric test is
 miscalibrated for this data and this grouping — a nominal p-value of
 0.01 does not mean what it usually means.</p>
-<p><code>reliable</code> is <code>FALSE</code> for <code>setA</code>.
-Its internal correlation (<code>rho_set</code>) exceeds anything a
-random draw achieved (<code>rho_null_max</code>), so the null was built
-from sets less coherent than the one being tested, and the empirical
-p-value is itself anti-conservative.</p>
+<p><code>ratio</code> is <code>FALSE</code> for <code>setA</code>. Its
+internal correlation (<code>rho_set</code>) exceeds anything a random
+draw achieved (<code>sigma_within</code>), so the null was built from
+sets less coherent than the one being tested, and the empirical p-value
+is itself anti-conservative.</p>
 </div>
 <div id="the-limitation-stated-plainly" class="section level2">
 <h2>The limitation, stated plainly</h2>
@@ -434,8 +425,8 @@ a list.</p>
 <p>Simulated type I error for a coherent set (ρ = 0.15 against a
 background of 0.05) is 0.125 at 250 genes and 0.255 at 900 genes,
 against a nominal 0.05.</p>
-<p>So when <code>reliable</code> is <code>FALSE</code>, this package is
-not the right tool. Use one that estimates correlation from the set
+<p>So when <code>ratio</code> is <code>FALSE</code>, this package is not
+the right tool. Use one that estimates correlation from the set
 itself:</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a><span class="fu">library</span>(limma)</span>
 <span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>design <span class="ot">&lt;-</span> <span class="fu">model.matrix</span>(<span class="sc">~</span> group)</span>
@@ -454,7 +445,7 @@ faster. Note that <code>roast</code> itself over-rejects for small sets
 the parametric null is from theory for your particular data and
 grouping. That is worth knowing before you trust any p-value from this
 workflow, whichever test produced it.</p>
-<p><strong>Weakly coherent sets.</strong> When <code>reliable</code> is
+<p><strong>Weakly coherent sets.</strong> When <code>ratio</code> is
 <code>TRUE</code>, the empirical p-value is sound and the procedure is
 straightforward to explain.</p>
 <p><strong>Auditing published results.</strong> Applied to a

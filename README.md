@@ -20,26 +20,39 @@ remotes::install_github('Sigma-dev-gif/gscalibrate')
 
 ```r
 res <- calibrate_geneset(expr, sets, group, covariates = cov)
-res[, c('set','beta','p_nominal','p_empirical','floor_std','reliable')]
+res[, c('set','beta','p_nominal','p_uncorrected','p_empirical','ratio')]
 ```
 
-`floor_std` is the 95th percentile of the null coefficient in units of its own
-standard error. Compare it to 1.96: values well above that indicate the
-parametric test is miscalibrated for this data and grouping.
+`p_uncorrected` is the naive empirical p-value; `p_empirical` is corrected.
+`ratio` is how much too narrow the uncorrected null was — values above about 1.5
+mean the naive p-value cannot be trusted.
 
-## Important limitation
+## What the correction does
 
-A draw-based null is **anti-conservative when the tested set is internally
-coherent**, because random draws cannot reproduce the correlation structure that
-defines a real gene set. Measured in TCGA lung adenocarcinoma: tissue programs
-reach mean inter-gene correlation of 0.245, random draws of equal size at most
-0.021. Simulated type I error reaches 0.125 at 250 genes and 0.255 at 900.
+A gene-randomization null is computed within a fixed sample split, so it captures
+only the variation from which genes were drawn. A real gene set's statistic also
+varies with which samples land in each group, and that component is larger. In
+TCGA lung adenocarcinoma, HALLMARK_E2F_TARGETS has a within-split null SD of 0.047
+while its own coefficient varies across random splits with SD 0.110 — the null is
+2.3x too narrow. Uncorrected type I error reaches 0.30.
 
-The `reliable` column flags sets where this applies. For those, use
-`limma::roast` or `limma::cameraPR`, which estimate correlation from the set
-itself rather than from draws.
+`calibrate_geneset()` estimates the across-split spread directly, then centres and
+rescales the null to match. Type I error across three cohorts and several gene sets:
+
+| | uncorrected | corrected |
+|---|---|---|
+| COADREAD G2M checkpoint | 0.30 | 0.045 |
+| BRCA G2M checkpoint | 0.19 | 0.055 |
+| LUAD E2F targets | 0.15 | 0.043 |
+| Notch signalling (already calibrated) | 0.04 | 0.055 |
+
+The corrected p-values agree closely with `limma::roast`, which reaches the same
+place by rotating residuals.
 
 ## Reference
 
 Wu D, Smyth GK (2012). Camera: a competitive gene set test accounting for
 inter-gene correlation. *Nucleic Acids Research* 40, e133.
+
+Goeman JJ, Buhlmann P (2007). Analyzing gene expression data in terms of gene
+sets: methodological issues. *Bioinformatics* 23, 980-987.

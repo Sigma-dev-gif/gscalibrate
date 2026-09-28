@@ -4,16 +4,19 @@
 \alias{set_coherence}
 \title{Mean inter-gene correlation of a gene set}
 \usage{
-set_coherence(expr, genes)
+set_coherence(expr, genes, group = NULL)
 }
 \arguments{
 \item{expr}{Numeric matrix, genes in rows (named), samples in columns.}
 
 \item{genes}{Character vector of gene identifiers.}
+
+\item{group}{Optional grouping vector. When supplied, correlation is computed
+on residuals after removing the group effect, so that a real difference
+between groups does not inflate the estimate.}
 }
 \value{
-Mean absolute-signed pairwise correlation, or NA if fewer than three
-  genes are present in \code{expr}.
+Mean pairwise correlation, or NA if fewer than three genes are present.
 }
 \description{
 Mean inter-gene correlation of a gene set

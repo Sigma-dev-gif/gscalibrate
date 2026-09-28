@@ -32,8 +32,8 @@ expr2[idx, ] <- sqrt(0.15) * matrix(rep(lat, each = length(idx)),
                 sqrt(0.85) * expr2[idx, ]
 
 res <- calibrate_geneset(expr2, sets, group, n_null = 100)
-res[, c("set", "beta", "p_nominal", "p_empirical", "floor_std",
-        "rho_set", "rho_null_max", "reliable")]
+
+        
 
 ## ----eval = FALSE-------------------------------------------------------------
 # library(limma)

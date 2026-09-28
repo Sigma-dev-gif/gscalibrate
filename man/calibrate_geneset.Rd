@@ -10,14 +10,14 @@ calibrate_geneset(
   group,
   covariates = NULL,
   n_null = 100,
+  n_split = 300,
   score_fn = NULL,
-  seed = 1,
-  coherence_warn = 2
+  seed = 1
 )
 }
 \arguments{
-\item{expr}{Numeric matrix of expression on a log scale, genes in rows
-(rownames required), samples in columns.}
+\item{expr}{Numeric matrix of log-scale expression, genes in rows (rownames
+required), samples in columns.}
 
 \item{sets}{Named list of character vectors.}
 
@@ -25,39 +25,49 @@ calibrate_geneset(
 
 \item{covariates}{Optional data frame of covariates, one row per sample.}
 
-\item{n_null}{Number of random sets per tested set. Default 100; resolution
-of the empirical p-value is \code{1/n_null}.}
+\item{n_null}{Random sets per tested set. Default 100.}
 
-\item{score_fn}{Function of \code{(expr, sets)} returning a score matrix with
-one row per set. Defaults to mean of standardized expression.}
+\item{n_split}{Random re-assignments used to estimate \code{sigma_across}.
+Default 300; below about 200 the estimate is unstable.}
+
+\item{score_fn}{Function of \code{(expr, sets)} returning one row per set.
+Defaults to the mean of standardized expression.}
 
 \item{seed}{Random seed.}
-
-\item{coherence_warn}{Warn when the tested set's coherence exceeds the
-maximum achieved by random draws times this factor. Default 2.}
 }
 \value{
 A data frame with one row per set: \code{beta}, \code{p_nominal},
-  \code{p_empirical}, \code{floor_95} (95th percentile of the absolute null
-  coefficient), \code{floor_std} (that floor in units of its own standard
-  error; compare to 1.96), \code{rho_set}, \code{rho_null_max}, and
-  \code{reliable} (FALSE when the coherence gap is large).
+  \code{p_uncorrected} (the naive empirical p, for comparison),
+  \code{p_empirical} (corrected), \code{sigma_within}, \code{sigma_across},
+  \code{ratio} (how much too narrow the uncorrected null was), and
+  \code{rho_set} (residual coherence, reported but not used for the test).
 }
 \description{
-Computes an empirical p-value for the association between a gene set score
-and a grouping variable, using a null distribution built from random gene
-sets matched on set size and mean expression decile.
+Tests the association between a gene set score and a grouping variable using
+a null built from random gene sets matched on size and mean expression
+decile, with a correction for the variance component that such a null cannot
+see.
 }
-\section{Important limitation}{
+\section{Why the uncorrected null fails}{
 
-Draw-based nulls are anti-conservative when the tested set is internally
-correlated, because random draws cannot reproduce the coherence of a real
-gene set. In TCGA lung adenocarcinoma, tissue programs reach mean inter-gene
-correlation of 0.245 while random draws of equal size reach at most 0.021.
-Simulated type I error for a coherent set reaches 0.125 at 250 genes and
-0.255 at 900 genes. This function reports the coherence gap and warns when
-it is large. For coherent sets, prefer \code{limma::roast} or
-\code{limma::cameraPR}, which estimate correlation from the set itself.
+A gene-randomization null is computed within a fixed sample split, so it
+captures variation from which genes were drawn and nothing else. A real gene
+set's statistic also varies according to which samples fall in each group,
+and that component is larger. Measured in TCGA lung adenocarcinoma on
+HALLMARK_E2F_TARGETS: the within-split null has SD 0.047 while the set's own
+coefficient varies across random splits with SD 0.110 — the null is 2.3 times
+too narrow. Type I error reaches 0.30 in some cohorts. Replicated in
+colorectal (ratio 2.67) and breast (2.12).
+}
+
+\section{The correction}{
+
+\code{sigma_across} is estimated by recomputing the set's own coefficient
+over \code{n_split} random re-assignments of the grouping variable. The
+within-split null is then centred and rescaled to that spread. Both steps are
+required: centring alone raises type I error to about 0.33, rescaling alone
+drops it to about 0.01, and the two together give 0.04–0.08 across cohorts
+and gene sets, leaving already-calibrated sets unchanged.
 }
 
 \examples{
@@ -65,9 +75,16 @@ set.seed(1)
 e <- matrix(rnorm(2000 * 40), 2000, 40,
             dimnames = list(paste0('g', 1:2000), paste0('s', 1:40)))
 grp <- rep(c(TRUE, FALSE), each = 20)
-calibrate_geneset(e, list(setA = paste0('g', 1:50)), grp, n_null = 50)
+calibrate_geneset(e, list(setA = paste0('g', 1:50)), grp,
+                  n_null = 50, n_split = 50)
 }
 \references{
 Wu D, Smyth GK (2012). Camera: a competitive gene set test accounting for
 inter-gene correlation. \emph{Nucleic Acids Research} 40, e133.
+
+Goeman JJ, Buhlmann P (2007). Analyzing gene expression data in terms of gene
+sets: methodological issues. \emph{Bioinformatics} 23, 980-987.
+
+Phipson B, Smyth GK (2010). Permutation P-values should never be zero.
+\emph{Statistical Applications in Genetics and Molecular Biology} 9, 39.
 }
