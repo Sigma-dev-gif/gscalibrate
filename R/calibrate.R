@@ -3,8 +3,8 @@
 #' @param expr Numeric matrix, genes in rows (named), samples in columns.
 #' @param genes Character vector of gene identifiers.
 #' @param group Optional grouping vector. When supplied, correlation is computed
-#'   on residuals after removing the group effect, so that a real difference
-#'   between groups does not inflate the estimate.
+#'   on residuals after removing the group effect, so a real difference between
+#'   groups does not inflate the estimate.
 #' @return Mean pairwise correlation, or NA if fewer than three genes are present.
 #' @export
 set_coherence <- function(expr, genes, group = NULL) {
@@ -18,76 +18,98 @@ set_coherence <- function(expr, genes, group = NULL) {
 
 #' Empirical calibration for per-sample gene set scores
 #'
-#' Tests the association between a gene set score and a grouping variable using
-#' a null built from random gene sets matched on size and mean expression
-#' decile, with a correction for the variance component that such a null cannot
-#' see.
+#' Compares a gene set's association with an outcome against random gene sets
+#' matched on size and mean expression decile, and reports how far the resulting
+#' null sits from the parametric one.
 #'
-#' @section Why the uncorrected null fails:
-#' A gene-randomization null is computed within a fixed sample split, so it
-#' captures variation from which genes were drawn and nothing else. A real gene
-#' set's statistic also varies according to which samples fall in each group,
-#' and that component is larger. Measured in TCGA lung adenocarcinoma on
-#' HALLMARK_E2F_TARGETS: the within-split null has SD 0.047 while the set's own
-#' coefficient varies across random splits with SD 0.110 — the null is 2.3 times
-#' too narrow. Type I error reaches 0.30 in some cohorts. Replicated in
-#' colorectal (ratio 2.67) and breast (2.12).
+#' @section What this tests:
+#' The empirical p-value answers a competitive question: is this set more
+#' associated with the outcome than a typical gene set of the same size and
+#' expression level? The nominal p-value answers the self-contained question of
+#' whether the set is associated at all (Goeman and Buhlmann 2007). Where
+#' background differential expression is high the two diverge sharply. In TCGA
+#' lung adenocarcinoma, 55 percent of genes differ individually between
+#' LKB1-deficient and intact tumours; 50 of 50 Hallmark sets are self-contained
+#' significant and 9 are competitively significant.
 #'
-#' @section The correction:
-#' \code{sigma_across} is estimated by recomputing the set's own coefficient
-#' over \code{n_split} random re-assignments of the grouping variable. The
-#' within-split null is then centred and rescaled to that spread. Both steps are
-#' required: centring alone raises type I error to about 0.33, rescaling alone
-#' drops it to about 0.01, and the two together give 0.04–0.08 across cohorts
-#' and gene sets, leaving already-calibrated sets unchanged.
+#' @section Known limitation:
+#' This null is computed within one fixed grouping, so it captures variation
+#' from which genes were drawn and not from which samples fall in each group.
+#' For a real gene set the second component is larger: on HALLMARK_E2F_TARGETS
+#' in TCGA LUAD the within-split null has SD 0.047 while the set's own
+#' coefficient varies across random splits with SD 0.110. Type I error against
+#' random sample splits reaches 0.30 for some sets.
+#'
+#' Two repairs were tested and neither works. Matching draws on inter-gene
+#' correlation is impossible: real programs reach mean correlation 0.245 while
+#' random draws of the same size reach at most 0.021. Combining gene
+#' randomization with sample permutation reverts to the self-contained null
+#' (Maciejewski 2014).
+#'
+#' Treat p_empirical as a diagnostic, not a corrected p-value. For inference
+#' under dependence use limma::camera, limma::roast, or rSEA::SEA.
 #'
 #' @param expr Numeric matrix of log-scale expression, genes in rows (rownames
 #'   required), samples in columns.
 #' @param sets Named list of character vectors.
-#' @param group Grouping variable, length \code{ncol(expr)}.
+#' @param group Grouping variable of length ncol(expr) for model = "lm".
+#'   Ignored when model = "cox".
 #' @param covariates Optional data frame of covariates, one row per sample.
-#' @param n_null Random sets per tested set. Default 100.
-#' @param n_split Random re-assignments used to estimate \code{sigma_across}.
-#'   Default 300; below about 200 the estimate is unstable.
-#' @param score_fn Function of \code{(expr, sets)} returning one row per set.
-#'   Defaults to the mean of standardized expression.
+#' @param model "lm" for a linear model on group, or "cox" for Cox
+#'   proportional hazards on time and event.
+#' @param time Survival time, required when model = "cox".
+#' @param event Event indicator, required when model = "cox".
+#' @param n_null Random sets per tested set. Default 100; p-value resolution is
+#'   1/(n_null + 1).
+#' @param score_fn Function of (expr, sets) returning one row per set. Defaults
+#'   to the mean of standardized expression.
 #' @param seed Random seed.
 #'
-#' @return A data frame with one row per set: \code{beta}, \code{p_nominal},
-#'   \code{p_uncorrected} (the naive empirical p, for comparison),
-#'   \code{p_empirical} (corrected), \code{sigma_within}, \code{sigma_across},
-#'   \code{ratio} (how much too narrow the uncorrected null was), and
-#'   \code{rho_set} (residual coherence, reported but not used for the test).
+#' @return A data frame with one row per set: beta, p_nominal, p_empirical,
+#'   floor_95 (95th percentile of the absolute null coefficient), floor_std
+#'   (that floor in units of its own standard error, comparable to 1.96) and
+#'   rho_set (residual coherence).
 #'
 #' @references
-#' Wu D, Smyth GK (2012). Camera: a competitive gene set test accounting for
-#' inter-gene correlation. \emph{Nucleic Acids Research} 40, e133.
-#'
 #' Goeman JJ, Buhlmann P (2007). Analyzing gene expression data in terms of gene
-#' sets: methodological issues. \emph{Bioinformatics} 23, 980-987.
+#' sets: methodological issues. Bioinformatics 23, 980-987.
+#'
+#' Wu D, Smyth GK (2012). Camera: a competitive gene set test accounting for
+#' inter-gene correlation. Nucleic Acids Research 40, e133.
+#'
+#' Maciejewski H (2014). Gene set analysis methods: statistical models and
+#' methodological differences. Briefings in Bioinformatics 15, 504-518.
 #'
 #' Phipson B, Smyth GK (2010). Permutation P-values should never be zero.
-#' \emph{Statistical Applications in Genetics and Molecular Biology} 9, 39.
+#' Statistical Applications in Genetics and Molecular Biology 9, 39.
 #'
 #' @examples
 #' set.seed(1)
 #' e <- matrix(rnorm(2000 * 40), 2000, 40,
 #'             dimnames = list(paste0('g', 1:2000), paste0('s', 1:40)))
 #' grp <- rep(c(TRUE, FALSE), each = 20)
-#' calibrate_geneset(e, list(setA = paste0('g', 1:50)), grp,
-#'                   n_null = 50, n_split = 50)
+#' calibrate_geneset(e, list(setA = paste0('g', 1:50)), grp, n_null = 50)
 #' @export
-calibrate_geneset <- function(expr, sets, group, covariates = NULL,
-                              n_null = 100, n_split = 300,
-                              score_fn = NULL, seed = 1) {
+calibrate_geneset <- function(expr, sets, group = NULL, covariates = NULL,
+                              model = c("lm", "cox"), time = NULL, event = NULL,
+                              n_null = 100, score_fn = NULL, seed = 1) {
+  model <- match.arg(model)
   stopifnot(is.matrix(expr), !is.null(rownames(expr)))
-  if (length(group) != ncol(expr)) stop("group must have length ncol(expr)")
+  if (is.null(names(sets))) stop("sets must be a named list")
+
+  if (model == "lm") {
+    if (is.null(group)) stop("group is required when model = 'lm'")
+    if (length(group) != ncol(expr)) stop("group must have length ncol(expr)")
+  } else {
+    if (!requireNamespace("survival", quietly = TRUE))
+      stop("model = 'cox' requires the survival package")
+    if (is.null(time) || is.null(event))
+      stop("time and event are required when model = 'cox'")
+    if (length(time) != ncol(expr) || length(event) != ncol(expr))
+      stop("time and event must have length ncol(expr)")
+  }
   if (!is.null(covariates) && nrow(covariates) != ncol(expr))
     stop("covariates must have one row per sample")
-  if (is.null(names(sets))) stop("sets must be a named list")
-  if (n_split < 100)
-    warning("n_split below 100 gives an unstable sigma_across estimate",
-            call. = FALSE)
 
   expr <- expr[apply(expr, 1, stats::sd) > 0, , drop = FALSE]
   if (nrow(expr) < 100) stop("too few variable genes in expr")
@@ -100,37 +122,40 @@ calibrate_geneset <- function(expr, sets, group, covariates = NULL,
     }, numeric(ncol(zz))))
   }
 
-  zsc  <- function(x) (x - mean(x)) / stats::sd(x)
-  gm   <- rowMeans(expr)
-  dec  <- cut(gm, stats::quantile(gm, 0:10 / 10), include.lowest = TRUE,
-              labels = FALSE)
+  zsc <- function(x) (x - mean(x)) / stats::sd(x)
+  gm  <- rowMeans(expr)
+  dec <- cut(gm, stats::quantile(gm, 0:10 / 10), include.lowest = TRUE, labels = FALSE)
   names(dec) <- rownames(expr)
   univ <- setdiff(rownames(expr), unlist(sets))
   pool <- split(univ, dec[univ])
 
-  dat  <- data.frame(.grp = group)
-  if (!is.null(covariates)) dat <- cbind(dat, covariates)
-  form <- stats::as.formula(paste(".y ~", paste(names(dat), collapse = " + ")))
-  frac <- mean(group == group[1])
+  cvn <- if (is.null(covariates)) character(0) else names(covariates)
+  base <- if (is.null(covariates)) data.frame(row.names = seq_len(ncol(expr))) else covariates
+
+  fitb <- function(y) {
+    d <- base; d$.y <- zsc(y)
+    if (model == "lm") {
+      d$.grp <- group
+      f <- stats::as.formula(paste(".y ~", paste(c(".grp", cvn), collapse = " + ")))
+      stats::coef(summary(stats::lm(f, data = d)))[2, c(1, 4)]
+    } else {
+      d$.t <- time; d$.e <- event
+      f <- stats::as.formula(paste("survival::Surv(.t, .e) ~",
+                                   paste(c(".y", cvn), collapse = " + ")))
+      s <- summary(survival::coxph(f, data = d))$coefficients
+      s[".y", c(1, 5)]
+    }
+  }
+
+  se_fac <- if (model == "lm") {
+    sqrt(1 / sum(group == group[1]) + 1 / sum(group != group[1]))
+  } else 1 / sqrt(sum(event == 1))
 
   set.seed(seed)
   out <- lapply(names(sets), function(nm) {
     g <- intersect(sets[[nm]], rownames(expr))
     if (length(g) < 5) return(NULL)
-
-    fitb <- function(y, gv = group) {
-      d <- dat; d$.grp <- gv; d$.y <- zsc(y)
-      stats::coef(summary(stats::lm(form, data = d)))[2, c(1, 4)]
-    }
-
-    obs_score <- score_fn(expr, list(.obs = g))[1, ]
-    obs <- fitb(obs_score)
-
-    # sigma_across: the set's own coefficient under random re-assignment
-    sig_ac <- stats::sd(vapply(seq_len(n_split), function(i) {
-      gv <- sample(c(TRUE, FALSE), ncol(expr), TRUE, c(frac, 1 - frac))
-      unname(fitb(obs_score, gv)[1])
-    }, numeric(1)))
+    obs <- fitb(score_fn(expr, list(.obs = g))[1, ])
 
     need  <- table(dec[g])
     draws <- replicate(n_null, unlist(lapply(names(need), function(k)
@@ -138,17 +163,13 @@ calibrate_geneset <- function(expr, sets, group, covariates = NULL,
     S  <- score_fn(expr, stats::setNames(draws, paste0("n", seq_len(n_null))))
     nb <- vapply(seq_len(nrow(S)), function(i) unname(fitb(S[i, ])[1]), numeric(1))
 
-    sig_wi <- stats::sd(nb)
-    nb_c   <- (nb - mean(nb)) * (sig_ac / sig_wi)
-
     data.frame(
-      set = nm, m = length(g),
+      set = nm, m = length(g), model = model,
       beta = unname(obs[1]), p_nominal = unname(obs[2]),
-      p_uncorrected = (sum(abs(nb)   >= abs(obs[1])) + 1) / (n_null + 1),
-      p_empirical   = (sum(abs(nb_c) >= abs(obs[1])) + 1) / (n_null + 1),
-      sigma_within = sig_wi, sigma_across = sig_ac,
-      ratio = sig_ac / sig_wi,
-      rho_set = set_coherence(expr, g, group),
+      p_empirical = (sum(abs(nb) >= abs(obs[1])) + 1) / (n_null + 1),
+      floor_95 = unname(stats::quantile(abs(nb), 0.95)),
+      floor_std = unname(stats::quantile(abs(nb), 0.95)) / se_fac,
+      rho_set = set_coherence(expr, g, if (model == "lm") group else NULL),
       stringsAsFactors = FALSE)
   })
   res <- do.call(rbind, out)

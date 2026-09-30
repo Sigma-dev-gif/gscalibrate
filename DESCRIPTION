@@ -1,7 +1,7 @@
 Package: gscalibrate
 Type: Package
 Title: Empirical Calibration for Per-Sample Gene Set Scores
-Version: 0.1.0
+Version: 0.3.0
 Authors@R: person('Joel', 'Minocha', role = c('aut','cre'),
                   email = 'you@example.com')
 Description: Per-sample gene set scores (ssGSEA, GSVA, mean-z) are often entered
@@ -15,7 +15,8 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Depends: R (>= 4.0)
 Imports: stats
-Suggests: GSVA, limma, testthat (>= 3.0.0), knitr, rmarkdown
+Suggests2: survival
+Suggests: GSVA, limma, rSEA, testthat (>= 3.0.0), knitr, rmarkdown
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 Config/roxygen2/version: 8.0.0

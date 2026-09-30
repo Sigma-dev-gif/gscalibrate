@@ -1,3 +1,3 @@
 export(calibrate_geneset)
 export(set_coherence)
-importFrom(stats, coef, cor, lm, quantile, sd, as.formula, setNames)
+importFrom(stats, coef, cor, lm, quantile, sd, as.formula, setNames, resid)
