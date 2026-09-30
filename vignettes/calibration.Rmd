@@ -16,16 +16,30 @@ knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
 A common workflow in cancer genomics: compute a per-sample score for each gene
 set (ssGSEA, GSVA, or a mean of standardized expression), then treat that score
 as an ordinary variable — compare it between groups, put it in a Cox model, test
-it against stage or survival. The p-values that come out assume the genes in the
-set are independent. They are not.
+it against stage or survival.
 
-This package computes an empirical p-value instead, using a null distribution
-built from random gene sets matched on size and mean expression. It also tells
-you when that null cannot be trusted.
+The p-value that comes out answers a **self-contained** question: is this set
+associated with the outcome at all? That is usually not the question people mean
+to ask. They mean the **competitive** question: is this set *more* associated
+than a typical gene set would be? The distinction is due to Goeman and Bühlmann
+(2007) and it matters enormously when many genes respond to the grouping.
+
+This package computes a competitive comparison against random gene sets matched
+on size and mean expression, and reports how far that null sits from the
+parametric one.
+
+## Why the distinction matters
+
+In TCGA lung adenocarcinoma, comparing LKB1-deficient with intact tumours, **55%
+of all genes differ individually at p < 0.05.** With background activity that
+high, essentially every gene set contains active genes. Running `rSEA` on the 50
+Hallmark sets there gives **50 of 50 self-contained significant** (adjusted p
+between 10⁻¹¹ and 10⁻⁵¹) and **9 of 50 competitively significant**.
+
+The self-contained answer is correct and useless. The competitive answer is the
+interesting one, and it is much harder to get right.
 
 ## A worked example
-
-Simulate an expression matrix where nothing is happening.
 
 ```{r}
 library(gscalibrate)
@@ -36,105 +50,107 @@ expr <- matrix(rnorm(n_genes * n_samples), n_genes, n_samples,
                dimnames = list(paste0("gene", seq_len(n_genes)),
                                paste0("s", seq_len(n_samples))))
 group <- rep(c(TRUE, FALSE), each = n_samples / 2)
-
-sets <- list(setA = paste0("gene", 1:120),
-             setB = paste0("gene", 201:320))
+sets  <- list(setA = paste0("gene", 1:120), setB = paste0("gene", 201:320))
 
 calibrate_geneset(expr, sets, group, n_null = 100)
 ```
 
 With independent genes and no effect, nominal and empirical p-values agree and
-`floor_std` sits near the theoretical 1.96. `ratio` is `TRUE`: the tested sets
-are no more internally correlated than a random draw.
+`floor_std` sits near the theoretical 1.96.
 
-## Where the parametric p-value goes wrong
+## Reading the output
 
-Now give the whole transcriptome a mild shift between groups — as happens
-whenever the grouping variable tracks something real in the tumour — and make
-one set internally coherent, as real gene sets are.
+`p_nominal` is the self-contained p-value from the model.
 
-```{r}
-set.seed(2)
-expr2 <- expr
+`p_empirical` is the competitive comparison against matched-random sets.
 
-# 40% of all genes differ slightly between groups
-de <- sample(n_genes, 0.4 * n_genes)
-expr2[de, group] <- expr2[de, group] + rnorm(length(de), 0, 0.3)
+`floor_std` is the 95th percentile of the null coefficient in units of its own
+standard error. **Compare it to 1.96.** Values well above that mean the
+parametric null is badly miscalibrated for this data and grouping — in real
+TCGA cohorts it commonly runs 5 to 7.
 
-# setA shares a latent factor: a coherent set
-lat <- rnorm(n_samples)
-idx <- match(sets$setA, rownames(expr2))
-expr2[idx, ] <- sqrt(0.15) * matrix(rep(lat, each = length(idx)),
-                                    length(idx), n_samples) +
-                sqrt(0.85) * expr2[idx, ]
+`rho_set` is the set's mean inter-gene correlation, computed on residuals after
+removing the group effect so that a real difference does not inflate it.
 
-res <- calibrate_geneset(expr2, sets, group, n_null = 100)
+## Survival models
 
-        
-```
-
-Two things to read here.
-
-`floor_std` is the 95th percentile of the null coefficient expressed in units of
-its own standard error. Compare it to **1.96**. When it is much larger, the
-parametric test is miscalibrated for this data and this grouping — a nominal
-p-value of 0.01 does not mean what it usually means.
-
-`ratio` is `FALSE` for `setA`. Its internal correlation (`rho_set`) exceeds
-anything a random draw achieved (`sigma_within`), so the null was built from sets
-less coherent than the one being tested, and the empirical p-value is itself
-anti-conservative.
-
-## The limitation, stated plainly
-
-A draw-based null cannot be fixed by matching draws on correlation. In TCGA lung
-adenocarcinoma, Human Protein Atlas tissue programs reach mean inter-gene
-correlation of 0.245, while random draws of the same size reach at most 0.021.
-There is no candidate pool to draw a match from, because coherence is what makes
-a gene set a gene set rather than a list.
-
-Simulated type I error for a coherent set (ρ = 0.15 against a background of 0.05)
-is 0.125 at 250 genes and 0.255 at 900 genes, against a nominal 0.05.
-
-So when `ratio` is `FALSE`, this package is not the right tool. Use one that
-estimates correlation from the set itself:
+The workflow this package was written about most often uses Cox regression, so
+that is supported directly:
 
 ```{r, eval = FALSE}
-library(limma)
-design <- model.matrix(~ group)
-roast(expr2, index = which(rownames(expr2) %in% sets$setA),
-      design = design, contrast = 2)
-cameraPR(statistic, index)   # direct replacement for pre-ranked GSEA
+calibrate_geneset(expr, sets, model = "cox",
+                  time = clin$os_time, event = clin$os_event,
+                  covariates = data.frame(purity = clin$purity))
 ```
 
-In the same simulation, `roast` gives type I error 0.035 at 250 genes and 0.065
-at 900, with power 0.76 and 0.72. It is also faster. Note that `roast` itself
-over-rejects for small sets (0.135 at 75 genes), so no method here is universally
-correct.
+## An important limitation
 
-## When this package is still useful
+**`p_empirical` is a diagnostic, not a corrected p-value.**
 
-Three cases.
+The null is computed within one fixed grouping, so it captures variation from
+which genes were drawn and not from which samples fall in each group. For a real
+gene set the second component is larger. Measured on HALLMARK_E2F_TARGETS in
+TCGA LUAD: the within-grouping null has SD 0.047 while the set's own coefficient
+varies across random sample splits with SD 0.110. Against random splits, where
+the null is true by construction, type I error reaches 0.30 for some sets.
+
+Two repairs were tested and neither works:
+
+- **Matching draws on inter-gene correlation is impossible.** Real tissue
+  programs reach mean correlation 0.245 while random draws of the same size
+  reach at most 0.021. There is no candidate pool to match from, because
+  coherence is what makes a gene set a gene set rather than a list.
+- **Combining gene randomization with sample permutation reverts to the
+  self-contained null**, a result due to Maciejewski (2014) and confirmed here:
+  a set with competitive p = 0.110 gave restandardized p = 0.003, tracking its
+  nominal p of 5×10⁻¹³.
+
+For inference under dependence, use a method built for it:
+
+```{r, eval = FALSE}
+limma::camera(expr, index, design)      # estimates inter-gene correlation
+limma::roast(expr, index, design)       # rotation, preserves correlation
+rSEA::SEA(pvalue, featureIDs, pathlist) # closed testing, valid under dependence
+```
+
+These three do not always agree. In TCGA LUAD across 50 Hallmark sets, 38 are
+significant after Benjamini–Hochberg alone, 6 survive the empirical null, 9
+survive rSEA's competitive test, and only 4 survive both. **Benjamini–Hochberg
+alone keeps 38 of 50; any method accounting for dependence keeps 6 to 9. Which 6
+to 9 depends on the method.**
+
+## Where this package is still useful
 
 **Diagnosis.** `floor_std` quantifies how far the parametric null is from theory
-for your particular data and grouping. That is worth knowing before you trust any
-p-value from this workflow, whichever test produced it.
+for your particular data and grouping. Worth knowing before trusting any p-value
+from this workflow, whichever test produced it.
 
-**Weakly coherent sets.** When `ratio` is `TRUE`, the empirical p-value is
-sound and the procedure is straightforward to explain.
-
-**Auditing published results.** Applied to a pre-registered pan-cancer analysis,
-28 of 43 associations significant after Benjamini–Hochberg correction — 65% —
-failed empirical calibration. Independently, `limma::camera` agreed with the
-empirical null on 90 of 99 tests with no contradictions in either direction.
+**Auditing.** Applied to a pre-registered pan-cancer analysis, 28 of 43
+associations significant after Benjamini–Hochberg failed empirical calibration.
+Across four cohorts and 50 Hallmark sets, 84 of 105 failed. `limma::camera`
+independently agreed with the empirical null on 90 of 99 tests with no
+contradictions in either direction.
 
 ## Choosing `n_null`
 
-The resolution of `p_empirical` is `1/n_null`. The default of 100 is enough to
-distinguish 0.5 from 0.05 but not 0.07 from 0.13. When a result sits near your
-threshold, raise it to 1000.
+Resolution of `p_empirical` is `1/(n_null + 1)`. The default of 100 distinguishes
+0.5 from 0.05 but not 0.07 from 0.13. Raise it to 1000 when a result sits near
+your threshold.
 
-## Reference
+## References
+
+Goeman JJ, Bühlmann P (2007). Analyzing gene expression data in terms of gene
+sets: methodological issues. *Bioinformatics* 23, 980–987.
 
 Wu D, Smyth GK (2012). Camera: a competitive gene set test accounting for
 inter-gene correlation. *Nucleic Acids Research* 40, e133.
+
+Maciejewski H (2014). Gene set analysis methods: statistical models and
+methodological differences. *Briefings in Bioinformatics* 15, 504–518.
+
+Ebrahimpoor M, Spitali P, Hettne K, Tsonaka R, Goeman J (2020). Simultaneous
+enrichment analysis of all possible gene-sets. *Briefings in Bioinformatics* 21,
+1302–1312.
+
+Phipson B, Smyth GK (2010). Permutation P-values should never be zero.
+*Statistical Applications in Genetics and Molecular Biology* 9, 39.

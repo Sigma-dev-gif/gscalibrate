@@ -15,8 +15,7 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Depends: R (>= 4.0)
 Imports: stats
-Suggests2: survival
-Suggests: GSVA, limma, rSEA, testthat (>= 3.0.0), knitr, rmarkdown
+Suggests: GSVA, limma, rSEA, survival, testthat (>= 3.0.0), knitr, rmarkdown
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 Config/roxygen2/version: 8.0.0

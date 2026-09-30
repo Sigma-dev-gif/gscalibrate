@@ -12,8 +12,8 @@ set_coherence(expr, genes, group = NULL)
 \item{genes}{Character vector of gene identifiers.}
 
 \item{group}{Optional grouping vector. When supplied, correlation is computed
-on residuals after removing the group effect, so that a real difference
-between groups does not inflate the estimate.}
+on residuals after removing the group effect, so a real difference between
+groups does not inflate the estimate.}
 }
 \value{
 Mean pairwise correlation, or NA if fewer than three genes are present.
