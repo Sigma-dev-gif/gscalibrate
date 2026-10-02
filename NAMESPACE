@@ -1,3 +1,5 @@
 export(calibrate_geneset)
 export(set_coherence)
-importFrom(stats, coef, cor, lm, quantile, sd, as.formula, setNames, resid)
+export(sep_index)
+export(sep_index_surv)
+importFrom(stats, coef, cor, lm, quantile, sd, as.formula, setNames, resid, median, model.matrix)
